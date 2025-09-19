@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>microscope</title>
+<title>Microscope Flow</title>
 <style>
   :root{
     --panel:rgba(255,255,255,.06);
@@ -30,15 +30,15 @@
     border:1px solid var(--border); background:var(--panel); backdrop-filter:blur(6px);
     position:relative; overflow:hidden; display:grid; place-items:center; padding:16px;
   }
-  /* 1画面目：顕微鏡画像を中央に大きく */
-  .scope-photo{max-width:92%; max-height:78%; object-fit:contain; display:block; margin:auto; filter:drop-shadow(0 8px 18px #0008);}
-  /* 画面下のテキスト＆コマンド */
-  .bottom{position:absolute; left:0; right:0; bottom:max(16px, env(safe-area-inset-bottom)); display:grid; justify-items:center; gap:12px; padding:0 16px;}
-  .hint{font-weight:800; font-size:var(--hint-size); text-shadow:0 2px 10px #0009}
-  .cmd{font-weight:900; font-size:var(--cmd-size); letter-spacing:.03em; padding:.9em 1.4em; border:2px solid #fff; background:transparent; color:#fff; border-radius:14px; cursor:pointer; box-shadow:0 2px 14px #0006;}
-  .cmd:active{transform:translateY(1px); opacity:.9}
 
-  /* 2画面目：丸い“視野”の中に 画像１ を中央表示 */
+  /* 画面1：顕微鏡画像を中央に大きく */
+  .scope-photo{
+    max-width:92%; max-height:78%;
+    object-fit:contain; display:block; margin:auto;
+    filter:drop-shadow(0 8px 18px #0008);
+  }
+
+  /* 画面2：丸い視野の中央に「画像１」を表示 */
   .view-wrap{position:absolute; inset:0; display:grid; place-items:center;}
   .view{
     width:min(90vmin,820px); aspect-ratio:1/1; border-radius:50%;
@@ -46,18 +46,31 @@
       radial-gradient(circle at 50% 50%, #ffffff10 0 38%, #00000099 98%, #000 100%),
       radial-gradient(circle at 50% 50%, #142033 0 60%, #0e172a 100%);
     box-shadow:0 0 0 6px #000, 0 0 36px #00e3ff44, inset 0 0 80px #000;
-    position:relative; overflow:hidden; display:grid; place-items:center;
+    overflow:hidden; display:grid; place-items:center;
   }
   .view-img{width:100%; height:100%; object-fit:contain; display:block;}
+
+  /* 下部テキスト＆コマンド */
+  .bottom{
+    position:absolute; left:0; right:0; bottom:max(16px, env(safe-area-inset-bottom));
+    display:grid; justify-items:center; gap:12px; padding:0 16px;
+  }
+  .hint{font-weight:800; font-size:var(--hint-size); text-shadow:0 2px 10px #0009}
+  .cmd{
+    font-weight:900; font-size:var(--cmd-size); letter-spacing:.03em;
+    padding:.9em 1.4em; border:2px solid #fff; background:transparent; color:#fff;
+    border-radius:14px; cursor:pointer; box-shadow:0 2px 14px #0006;
+  }
+  .cmd:active{transform:translateY(1px); opacity:.9}
 </style>
 </head>
 <body>
 
-<!-- 画面1：顕微鏡画像＋コマンド -->
+<!-- 画面1：顕微鏡（中央に大きく） -->
 <section id="s1" class="screen show">
   <div class="stage">
     <div class="frame">
-      <img id="scope" class="scope-photo" alt="顕微鏡">
+      <img id="scope" class="scope-photo" alt="microscope">
       <div class="bottom">
         <div class="hint">顕微鏡に何かが見えるよ？</div>
         <button id="toView" class="cmd" type="button">顕微鏡をのぞいてみる</button>
@@ -66,7 +79,7 @@
   </div>
 </section>
 
-<!-- 画面2：視野の中央に「画像１」を表示 -->
+<!-- 画面2：視野の中央に「画像１」 -->
 <section id="s2" class="screen">
   <div class="stage">
     <div class="frame">
@@ -83,34 +96,71 @@
   </div>
 </section>
 
+<!-- 画面3：遷移後（自由に編集） -->
+<section id="s3" class="screen">
+  <div class="stage">
+    <div class="frame">
+      <div class="bottom">
+        <div class="hint">観察ありがとう！ 次の謎へ進もう</div>
+        <a id="nextLink" class="cmd" href="./">トップへ戻る</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 音声（任意）：無くても3画面目へ進みます -->
 <audio id="voice" preload="auto">
   <source src="正解.m4a" type="audio/mp4"/>
+  <!-- 予備：別名を使うなら追加
+  <source src="voice.mp3" type="audio/mpeg"/>
+  -->
 </audio>
 
 <script>
-  // 画像を候補名で順に試すユーティリティ
+  /* 画像を候補名で順に読み込む（日本語名/英字名/フォルダを自動フォールバック） */
   function loadByCandidates(imgEl, list){
     let i=0; const go=()=>{ imgEl.onerror=()=>{ if(++i<list.length) go(); }; imgEl.src=list[i]; }; go();
   }
 
-  // 1画面目：顕微鏡画像（顕微鏡.* / microscope.* どちらでもOK）
+  // 1画面目：顕微鏡画像（microscope.* / 顕微鏡.* / assets/*）
   loadByCandidates(
     document.getElementById('scope'),
-    ["顕微鏡.png","顕微鏡.jpg","顕微鏡.jpeg","顕微鏡.webp","microscope.png","microscope.jpg","顕微鏡.png.png",
-     "assets/顕微鏡.png","assets/microscope.png"]
+    ["microscope.png","microscope.jpg","顕微鏡.png","顕微鏡.jpg","顕微鏡.jpeg","microscope.webp",
+     "assets/microscope.png","assets/顕微鏡.png"]
   );
 
-  // 2画面目：中央に「画像１」を表示（拡張子や数字の全角半角違いも吸収）
+  // 2画面目：中央に「画像１」（image1.* / 画像１.* / assets/*）
   loadByCandidates(
     document.getElementById('viewPic'),
-    ["画像１.png","画像１.jpg","画像1.png","画像1.jpg","fairy_idle.png","assets/画像１.png","assets/画像1.png","assets/fairy_idle.png"]
+    ["image1.png","image1.jpg","画像１.png","画像1.png","画像１.jpg","画像1.jpg",
+     "assets/image1.png","assets/画像１.png","assets/画像1.png"]
   );
 
-  // 画面遷移と音声再生
-  const s1=document.getElementById('s1'), s2=document.getElementById('s2');
-  document.getElementById('toView').addEventListener('click', ()=>{ s1.classList.remove('show'); s2.classList.add('show'); });
-  const voice=document.getElementById('voice');
-  document.getElementById('listen').addEventListener('click', ()=>{ try{ voice.currentTime=Math.max(0,voice.currentTime); voice.play(); }catch(e){} });
+  // 画面切り替え
+  const s1 = document.getElementById('s1');
+  const s2 = document.getElementById('s2');
+  const s3 = document.getElementById('s3');
+  function showScreen(el){ [s1,s2,s3].forEach(sec=>sec.classList.remove('show')); el.classList.add('show'); }
+
+  document.getElementById('toView').addEventListener('click', ()=> showScreen(s2));
+
+  // 「聞いてみる」→ 音声があれば再生、無くても必ず画面3へ
+  const voice = document.getElementById('voice');
+  document.getElementById('listen').addEventListener('click', ()=>{
+    let advanced = false;
+    const go3 = ()=>{ if(advanced) return; advanced = true; showScreen(s3); };
+    try{
+      voice.currentTime = 0;
+      voice.onended = go3;
+      const p = voice.play();
+      if (p && typeof p.then === 'function') p.catch(()=>go3());
+      else setTimeout(go3, 6000);
+    }catch(e){ go3(); }
+    setTimeout(go3, 8000); // 最終保険
+  });
+
+  // 3画面目のリンク先（必要なら変更）
+  document.getElementById('nextLink').href = "./"; // 例：'index.html' や 'next.html' に変更可
 </script>
 </body>
 </html>
