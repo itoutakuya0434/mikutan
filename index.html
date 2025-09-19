@@ -3,132 +3,145 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>顕微鏡ビュー（カラー）</title>
+<title>microscope</title>
 <style>
   :root{
-    --accent:#ff8a00;            /* 〇＝オレンジ */
-    --arrow-len:3cm;             /* 矢印の長さ（目安3cm） */
-    --arrow-thick:10px;          /* 矢印の太さ */
-    --hint-size:clamp(18px,3.5vw,28px); /* 文字大きめ */
-    --view-font:clamp(22px,4.5vw,34px);
+    --accent:#ff8a00;                 /* オレンジ系アクセント */
+    --panel:rgba(255,255,255,.06);
+    --border:rgba(255,255,255,.14);
+    --hint-size:clamp(18px,3.6vw,28px);
+    --cmd-size:clamp(18px,3.8vw,24px);
   }
   *{box-sizing:border-box}
-  html,body{height:100%;margin:0;font-family:system-ui,-apple-system,"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif}
+  html,body{height:100%;margin:0;color:#fff;
+    font-family:system-ui,-apple-system,"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif}
   body{
-    background: radial-gradient(1400px 700px at -10% -10%, #6ee7ff22, transparent 60%),
-                radial-gradient(1200px 600px at 110% 0%, #a78bfa22, transparent 60%),
-                linear-gradient(#0b1220,#0e172a 40%,#111827);
-    color:#fff; overflow:hidden;
+    background:
+      radial-gradient(1100px 550px at 10% -10%, #60a5fa22, transparent 60%),
+      radial-gradient(900px 450px at 110% 0%, #a78bfa22, transparent 60%),
+      radial-gradient(600px 600px at 50% 120%, #22d3ee20, transparent 60%),
+      linear-gradient(#0b1220,#0e172a 40%,#111827);
+    overflow:hidden;
   }
-  .wrap{height:100%;display:grid;place-items:center;padding:16px}
+  .screen{position:fixed; inset:0; display:none;}
+  .screen.show{display:block;}
+
+  /* 共通レイアウト */
   .stage{
-    position:relative; width:min(900px,96vw); aspect-ratio:16/9;
-    border:1px solid #ffffff22; border-radius:18px; backdrop-filter: blur(6px);
-    background:#0002; overflow:hidden;
+    position:absolute; inset:0; display:grid; place-items:center; padding:16px;
   }
-  /* 顕微鏡画像（カラー） */
-  .scope-img{
-    position:absolute; inset:0; width:100%; height:100%; object-fit:contain; filter: none;
+  .frame{
+    width:min(980px,96vw); aspect-ratio:16/9; border-radius:18px;
+    border:1px solid var(--border); background:var(--panel); backdrop-filter:blur(6px);
+    position:relative; overflow:hidden;
   }
 
-  /* オレンジの〇（接眼レンズ上／タップターゲット） */
-  .eyepiece-dot{
-    position:absolute; width:46px; height:46px; border-radius:50%;
-    background: var(--accent);
-    box-shadow: 0 0 0 6px #00000055, 0 0 16px #ffb24eaa, inset 0 0 8px #ffffff80;
-    cursor:pointer; user-select:none; -webkit-user-drag:none; touch-action:manipulation;
+  /* 1画面目：イラスト無し、雰囲気だけのカラー装飾 */
+  .color-clouds{
+    position:absolute; inset:0; pointer-events:none; opacity:.9;
+    background:
+      radial-gradient(600px 420px at 20% 30%, #48d1cc33, transparent 60%),
+      radial-gradient(520px 360px at 80% 25%, #ff9bd433, transparent 60%),
+      radial-gradient(520px 360px at 60% 75%, #7dd3fc33, transparent 60%);
+    filter: blur(2px);
   }
-  /* ← 位置は画像に合わせて調整（デフォは右上寄り） */
-  .eyepiece-dot{ top:18%; left:64%; }  /* 必要ならここを微調整 */
 
-  /* 矢印（大きく、〇へ向ける） */
-  .arrow-wrap{
-    position:absolute; left:calc(64% - var(--arrow-len) - 30px); top:19%; /* 〇の左に配置 */
-    display:flex; align-items:center; gap:14px; pointer-events:none;
-    transform: translateY(-10px);
-  }
-  .arrow{
-    width:var(--arrow-len); height:var(--arrow-thick);
-    background:#fff; border-radius:999px; position:relative;
-    box-shadow:0 0 12px #ffffff88;
-  }
-  .arrow::after{
-    content:""; position:absolute; right:-18px; top:50%; transform:translateY(-50%);
-    border-left:18px solid #fff; border-top:10px solid transparent; border-bottom:10px solid transparent;
-    filter: drop-shadow(0 0 8px #ffffffaa);
-  }
-  .hint{font-weight:800; font-size:var(--hint-size); text-shadow:0 2px 8px #0009}
-
-  /* 視野オーバーレイ（タップで拡大表示） */
-  .overlay{ position:fixed; inset:0; background:#000a; display:none; place-items:center; z-index:50 }
-  .overlay.show{ display:grid }
+  /* 2画面目：視野（丸）だけ表示。カラーで幻想的に */
+  .view-wrap{position:absolute; inset:0; display:grid; place-items:center;}
   .view{
     width:min(90vmin,820px); aspect-ratio:1/1; border-radius:50%;
     background:
-      radial-gradient(circle at 50% 50%, #ffffff10 0 40%, #00000090 98%, #000000aa 100%),
-      radial-gradient(circle at 50% 50%, #1c2738 0 60%, #0e172a 100%);
-    box-shadow: 0 0 0 6px #000, 0 0 40px #00e3ff55, inset 0 0 60px #000000aa;
-    display:grid; place-items:center; position:relative; overflow:hidden;
-  }
-  /* 視野の中に文字を入れる（大きめ） */
-  .view .cta{
-    font-size: var(--view-font); font-weight:900; letter-spacing:.06em;
-    background: linear-gradient(90deg, #fff, #ffd18a); -webkit-background-clip:text; background-clip:text; color:transparent;
-    text-shadow: 0 2px 14px #000a;
-    padding:.2em .6em; border-radius:12px; border:1px solid #ffffff22;
-  }
-  .close{
-    position:absolute; top:8px; right:12px; font-size:18px;
-    background:#ffffff22; color:#fff; border:1px solid #ffffff44; border-radius:10px;
-    padding:6px 10px; cursor:pointer;
+      radial-gradient(circle at 50% 50%, #ffffff0f 0 40%, #00000099 98%, #000 100%),
+      conic-gradient(from 210deg, #5eead4 0 20%, #a78bfa 20% 40%, #60a5fa 40% 60%, #f472b6 60% 80%, #22d3ee 80% 100%);
+    box-shadow:0 0 0 6px #000, 0 0 36px #00e3ff44, inset 0 0 80px #000;
+    position:relative; overflow:hidden;
   }
 
-  /* スマホ最適化（矢印がはみ出る時） */
+  /* 画面下のテキスト＆コマンド（□かこみ） */
+  .bottom{
+    position:absolute; left:0; right:0; bottom: max(16px, env(safe-area-inset-bottom));
+    display:grid; justify-items:center; gap:12px; padding:0 16px;
+  }
+  .hint{font-weight:800; font-size:var(--hint-size); text-shadow:0 2px 10px #0009}
+  .cmd{
+    font-weight:900; font-size:var(--cmd-size); letter-spacing:.03em;
+    padding:.9em 1.4em; border:2px solid #fff; background:transparent; color:#fff;
+    border-radius:14px; cursor:pointer; outline:none;
+    box-shadow:0 2px 14px #0006;
+  }
+  .cmd:active{transform:translateY(1px); opacity:.9}
+
+  /* 小さめ画面の調整 */
   @media (max-width:680px){
-    .arrow-wrap{ left: 12px; top: 14px; }
-    .eyepiece-dot{ top:22%; left:66%; }
+    .frame{border-radius:14px}
   }
 </style>
 </head>
 <body>
-<div class="wrap">
+
+<!-- 画面1：下に「顕微鏡に何かが見えるよ？」＋「顕微鏡をのぞいてみる」 -->
+<section id="s1" class="screen show">
   <div class="stage">
-    <!-- カラー顕微鏡の画像をアップして使う（microscope.png）。なければ一旦空でもOK -->
-    <img src="microscope.png" alt="顕微鏡（カラー）" class="scope-img" onerror="this.style.opacity=0.2;">
-
-    <!-- オレンジの〇（接眼レンズ上の微動ノブ想定／動かさないで→ドラッグ不可。タップで拡大） -->
-    <div id="dot" class="eyepiece-dot" title="タップで視野を拡大"></div>
-
-    <!-- 〇に向けた大きめの矢印＋文言（「タッチしてね」→変更後の文） -->
-    <div class="arrow-wrap">
-      <div class="arrow"></div>
-      <div class="hint">顕微鏡に何かが見えるよ</div>
+    <div class="frame">
+      <div class="color-clouds"></div>
+      <div class="bottom">
+        <div class="hint">顕微鏡に何かが見えるよ？</div>
+        <button id="toView" class="cmd" type="button">顕微鏡をのぞいてみる</button>
+      </div>
     </div>
   </div>
-</div>
+</section>
 
-<!-- 視野オーバーレイ：〇タップで表示。中の文字は「聞いてみる」。 -->
-<div id="overlay" class="overlay" aria-hidden="true">
-  <div class="view">
-    <button class="close" type="button" onclick="hideView()">閉じる</button>
-    <div class="cta">聞いてみる</div>
+<!-- 画面2（視野）：下に「妖精がなにか言っているよ」＋「聞いてみる」 -->
+<section id="s2" class="screen">
+  <div class="stage">
+    <div class="frame">
+      <div class="view-wrap">
+        <div class="view" aria-label="顕微鏡の視野（カラー）"></div>
+      </div>
+      <div class="bottom">
+        <div class="hint">妖精がなにか言っているよ</div>
+        <button id="listen" class="cmd" type="button">聞いてみる</button>
+      </div>
+    </div>
   </div>
-</div>
+</section>
+
+<!-- 再生する音声（必要に応じてファイル名を変更） -->
+<audio id="voice" preload="auto">
+  <source src="正解.m4a" type="audio/mp4"/>
+  <!-- 予備：別名を使うなら下の行を生かしてファイルを置く
+  <source src="voice.m4a" type="audio/mp4"/>
+  <source src="voice.mp3" type="audio/mpeg"/>
+  -->
+</audio>
 
 <script>
-  // 〇は「動かさない」仕様 → ドラッグ無効
-  const dot = document.getElementById('dot');
-  ['dragstart','mousedown','touchstart'].forEach(ev=> dot.addEventListener(ev, e=>{
-    if(ev==='dragstart') e.preventDefault();
-  }));
+  const s1 = document.getElementById('s1');
+  const s2 = document.getElementById('s2');
+  const toViewBtn = document.getElementById('toView');
+  const listenBtn = document.getElementById('listen');
+  const voice = document.getElementById('voice');
 
-  // 〇タップで視野拡大（「接眼レンズをのぞく」→ 〇をタッチしたら拡大）
-  const overlay = document.getElementById('overlay');
-  const showView = ()=>{ overlay.classList.add('show'); overlay.setAttribute('aria-hidden','false'); };
-  const hideView = ()=>{ overlay.classList.remove('show'); overlay.setAttribute('aria-hidden','true'); };
+  // 1画面目 → 2画面目へ（ボタンクリックで遷移）
+  toViewBtn.addEventListener('click', () => {
+    s1.classList.remove('show');
+    s2.classList.add('show');
+    // もし別ページへ遷移したい場合は、ここを location.href = 'next.html' に変更
+  });
 
-  dot.addEventListener('click', showView);
-  overlay.addEventListener('click', e=>{ if(e.target===overlay) hideView(); });
+  // 「聞いてみる」→ 音声を再生（iOS対応：ユーザー操作直後のplay）
+  listenBtn.addEventListener('click', () => {
+    try {
+      voice.currentTime = Math.max(0, voice.currentTime); // 「再開」ニュアンス
+      voice.play().catch(()=>{ /* 無音でも落ちない */ });
+    } catch(e) {}
+  });
+
+  // 任意：エスケープで停止
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') try { voice.pause(); } catch(e){}
+  });
 </script>
 </body>
 </html>
