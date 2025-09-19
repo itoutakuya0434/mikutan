@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <title>ミクたん・顕微鏡アプリ</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="color-scheme" content="dark light" />
+  <meta name="theme-color" content="#0b0f14" />
+  <style>
+    :root {
+      --bg:#0b0f14; --fg:#e9f0f6; --accent:#7fd8ff; --muted:#9bb2c4;
+      --panel:#111820; --line:rgba(127,216,255,.35)
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0}
+    body{background:var(--bg);color:var(--fg);font-family:-apple-system,system-ui,"Segoe UI",Roboto,"Noto Sans JP",sans-serif}
+    .app{height:100%;display:grid;place-items:center;padding:env(safe-area-inset-top) 12px env(safe-area-inset-bottom)}
+    .scene{display:none;width:100%;height:100%;max-width:900px;padding:16px}
+    .scene.show{display:grid;place-items:center;gap:18px}
+
+    /* 共通ボタン */
+    .btn{-webkit-tap-highlight-color:transparent;cursor:pointer;border:0;border-radius:12px;padding:12px 16px;font-size:16px;background:#171c22;color:var(--fg);box-shadow:0 2px 0 #000,0 10px 20px rgba(0,0,0,.25)}
+    .btn.primary{background:linear-gradient(180deg,#1d2730,#0e151b);border:1px solid #23313c}
+    .btn:active{transform:translateY(1px)}
+    .tip{color:var(--muted);font-size:12px}
+
+    /* 1. 待機画面（顕微鏡） */
+    .microscope-wrap{
+      position:relative;width:min(92vw,92vh);aspect-ratio:1/1;display:grid;place-items:center;
+      background:radial-gradient(120% 120% at 50% 40%,#0f1720 0%,#0b0f14 60%,#070a0e 100%);
+      border-radius:28px;box-shadow:0 12px 40px rgba(0,0,0,.5),inset 0 0 0 1px rgba(255,255,255,.04)
+    }
+    .microscope{width:86%;height:auto}
+    .eyepiece{cursor:pointer;animation:pulse 1.8s infinite}
+    .eyepiece:focus{outline:4px solid var(--accent);outline-offset:10px;border-radius:50%}
+    @keyframes pulse{0%{transform:scale(1)}50%{transform:scale(1.03)}100%{transform:scale(1)}}
+    .hint{position:absolute;top:16px;left:50%;transform:translateX(-50%);text-align:center;user-select:none}
+    .hint-bubble{display:inline-block;padding:8px 12px;background:rgba(10,25,36,.8);border:1px solid rgba(127,216,255,.4);border-radius:999px;font-size:14px}
+    .hint-arrow{font-size:18px;color:var(--accent);margin-top:6px}
+
+    /* 2. のぞき込みズーム＋視野 */
+    .zoom-view{
+      position:relative;width:min(92vw,92vh);aspect-ratio:1/1;border-radius:28px;overflow:hidden;
+      display:grid;place-items:center;background:radial-gradient(circle at 50% 30%,#0e1a24 0%,#0b0f14 60%,#070a0e 100%)
+    }
+    .zoom-ring{
+      width:120px;height:120px;border:12px solid var(--accent);border-radius:50%;
+      box-shadow:0 0 30px rgba(127,216,255,.45);animation:zoomIn 1400ms ease forwards
+    }
+    .zoom-text{color:var(--muted);margin-top:12px}
+    @keyframes zoomIn{from{transform:scale(1);opacity:.9}to{transform:scale(9);opacity:0}}
+    @media (prefers-reduced-motion: reduce){.zoom-ring{animation:none}}
+
+    .scope{
+      position:relative;width:min(92vw,92vh);aspect-ratio:1/1;border-radius:50%;overflow:hidden;
+      background:radial-gradient(circle at 50% 50%,#111 0%,#000 60%);
+      box-shadow:0 0 0 8px #000,0 0 0 12px #2a2a2a,0 16px 40px rgba(0,0,0,.7) inset,0 8px 30px rgba(0,0,0,.6);
+      animation:fadeIn .6s ease both
+    }
+    @keyframes fadeIn{from{opacity:0;transform:scale(.98)}to{opacity:1;transform:scale(1)}}
+    .scope img{width:120%;height:120%;object-fit:cover;transform:translate(-10%,-10%) scale(1.05);filter:contrast(1.05) saturate(1.1)}
+    .vignette{position:absolute;inset:0;pointer-events:none;background:radial-gradient(circle at 50% 50%,rgba(0,0,0,0) 55%,rgba(0,0,0,.25) 72%,rgba(0,0,0,.62) 100%)}
+    .grain{position:absolute;inset:0;pointer-events:none;background-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch"/></filter><rect width="120" height="120" filter="url(%23n)" opacity="0.04"/></svg>');mix-blend-mode:overlay}
+
+    /* 矢印バッジ（共通） */
+    .arrow-badge{
+      margin-top:12px;display:inline-flex;gap:8px;align-items:center;
+      background:rgba(13,27,38,.8);border:1px solid var(--line);border-radius:999px;padding:8px 12px
+    }
+    .arrow{font-size:18px;color:var(--accent)}
+
+    /* 3. 音声２の“ピカピカ”エフェクト */
+    .flash { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(circle at 50% 50%, rgba(127,216,255,.45), rgba(127,216,255,0) 60%); mix-blend-mode: screen; opacity: 0; animation: none; }
+    .flash.show { animation: flashBlink 600ms ease-in-out infinite }
+    @keyframes flashBlink { 0%{opacity:0} 50%{opacity:.75} 100%{opacity:0} }
+
+    /* 4. 終了テキスト */
+    .final { text-align:center; display:grid; place-items:center; gap:16px }
+    .final h1{font-size:clamp(28px,6vw,48px);margin:0}
+  </style>
+</head>
+<body>
+  <main id="app" class="app" aria-live="polite">
+    <!-- 1. 待機画面 -->
+    <section id="scene-1" class="scene show" aria-label="待機画面（顕微鏡）">
+      <div class="microscope-wrap">
+        <!-- 簡易SVG顕微鏡（接眼レンズがタップターゲット） -->
+        <svg class="microscope" viewBox="0 0 600 600" role="img" aria-labelledby="title desc">
+          <title id="title">顕微鏡</title>
+          <desc id="desc">接眼レンズの部分を押すと、のぞき込み演出が始まります。</desc>
+          <rect x="120" y="470" width="360" height="40" fill="#2f2f2f" rx="8"></rect>
+          <path d="M200,480 C260,420 340,420 400,480" fill="#444"></path>
+          <rect x="280" y="220" width="40" height="160" rx="8" fill="#666"></rect>
+          <path d="M210,360 C210,300 300,260 360,300 C420,340 380,420 320,430" fill="#555"></path>
+          <!-- 接眼レンズ -->
+          <g id="eyepiece" class="eyepiece" tabindex="0" aria-label="接眼レンズ（押してのぞく）" role="button">
+            <circle cx="300" cy="130" r="42" fill="#0f2130" stroke="#7fd8ff" stroke-width="4"></circle>
+            <circle cx="300" cy="130" r="26" fill="#17384f"></circle>
+            <circle cx="300" cy="130" r="14" fill="#0a1924"></circle>
+            <circle cx="300" cy="130" r="6"  fill="#9fe3ff"></circle>
+          </g>
+          <rect x="290" y="160" width="20" height="70" fill="#777" rx="8"></rect>
+          <rect x="270" y="230" width="60" height="30" fill="#8a8a8a" rx="6"></rect>
+          <rect x="200" y="420" width="200" height="20" fill="#2a2a2a" rx="6"></rect>
+        </svg>
+
+        <div class="hint" aria-hidden="true">
+          <div class="hint-bubble">タッチしてね</div>
+          <div class="hint-arrow">⬆</div>
+        </div>
+      </div>
+      <button id="btn-1" class="btn primary">接眼レンズをのぞく</button>
+      <p class="tip">Enter/スペースでもOK</p>
+    </section>
+
+    <!-- 2a. のぞき込み演出 -->
+    <section id="scene-2a" class="scene" aria-label="のぞき込み中">
+      <div class="zoom-view">
+        <div class="zoom-ring" aria-hidden="true"></div>
+        <div class="zoom-text">のぞき込み中…</div>
+      </div>
+    </section>
+
+    <!-- 2b. 視野（ミクたん＋吹き出し） -->
+    <section id="scene-2b" class="scene" aria-label="顕微鏡の視野">
+      <div class="scope">
+        <img id="img-mikutan" src="./image1.png" alt="ミクたん（視野の中）" />
+        <div class="vignette"></div>
+        <div class="grain"></div>
+      </div>
+      <div class="arrow-badge">
+        <span class="arrow">⬆</span>
+        <span>妖精さんが何か言いたそうだよ</span>
+      </div>
+      <button id="btn-2" class="btn primary">タッチしてみる</button>
+    </section>
+
+    <!-- 3. セリフ再生（音声1→2→3、2でフラッシュ） -->
+    <section id="scene-3" class="scene" aria-label="ミクたんがしゃべる">
+      <div class="scope">
+        <img src="./image1.png" alt="ミクたん（視野の中）" />
+        <div class="vignette"></div>
+        <div class="grain"></div>
+      </div>
+      <div class="arrow-badge">
+        <span>再生中…</span>
+      </div>
+      <div id="flash" class="flash" aria-hidden="true"></div>
+    </section>
+
+    <!-- 4. 終了メッセージ -->
+    <section id="scene-4" class="scene" aria-label="終了画面">
+      <div class="final">
+        <h1>レッツ謎解き！</h1>
+        <p class="tip">10秒後に最初の画面に戻ります。</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- 音声（あとでファイルを置けばOK） -->
+  <audio id="audio1" preload="auto"><source src="./audio1.mp3" type="audio/mpeg" /></audio>
+  <audio id="audio2" preload="auto"><source src="./audio2.mp3" type="audio/mpeg" /></audio>
+  <audio id="audio3" preload="auto"><source src="./audio3.mp3" type="audio/mpeg" /></audio>
+
+  <script>
+    // シーン参照
+    const s1 = document.getElementById('scene-1');
+    const s2a = document.getElementById('scene-2a');
+    const s2b = document.getElementById('scene-2b');
+    const s3 = document.getElementById('scene-3');
+    const s4 = document.getElementById('scene-4');
+    const eyepiece = document.getElementById('eyepiece');
+    const btn1 = document.getElementById('btn-1');
+    const btn2 = document.getElementById('btn-2');
+    const flash = document.getElementById('flash');
+
+    const a1 = document.getElementById('audio1');
+    const a2 = document.getElementById('audio2');
+    const a3 = document.getElementById('audio3');
+
+    function show(el) {
+      for (const sc of document.querySelectorAll('.scene')) sc.classList.remove('show');
+      el.classList.add('show');
+    }
+
+    // 1 → 2a → 2b
+    function goToScope() {
+      show(s2a);
+      const dur = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 300 : 1400;
+      setTimeout(()=>show(s2b), dur);
+    }
+    eyepiece.addEventListener('click', goToScope);
+    eyepiece.addEventListener('keydown', (e)=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); goToScope(); }});
+    btn1.addEventListener('click', goToScope);
+
+    // 2b → 3（音声1→2→3の連続再生、2でピカピカ）
+    btn2.addEventListener('click', async ()=>{
+      show(s3);
+      try {
+        // 連続再生の順序制御
+        await playAudioSequential();
+        // 再生が終わったら 4 へ
+        show(s4);
+        setTimeout(()=>show(s1), 10000); // 10秒で戻る
+      } catch (e) {
+        alert('再生にはボタン操作が必要です。もう一度押してください。');
+      } finally {
+        stopFlash();
+      }
+    });
+
+    async function play(el){
+      el.currentTime = 0;
+      await el.play();
+      await waitEnded(el);
+    }
+    function waitEnded(el){
+      return new Promise((resolve)=>{ el.onended = ()=>resolve(); });
+    }
+
+    async function playAudioSequential(){
+      // 音声１
+      await play(a1).catch(()=>{});
+      // 音声２（フラッシュON）
+      startFlash();
+      await play(a2).catch(()=>{});
+      stopFlash();
+      // 音声３
+      await play(a3).catch(()=>{});
+    }
+
+    function startFlash(){ flash.classList.add('show'); }
+    function stopFlash(){ flash.classList.remove('show'); }
+
+    // 初期表示
+    show(s1);
+
+    // 404時の軽い検知（コンソール表示のみ）
+    window.addEventListener('load', ()=>{
+      ['image1.png','audio1.mp3','audio2.mp3','audio3.mp3'].forEach(path=>{
+        fetch('./'+path,{method:'HEAD'}).then(r=>{
+          if(!r.ok) console.log(path+' が見つかりません（後で追加してください）');
+        }).catch(()=>console.log(path+' の確認に失敗'));
+      });
+    });
+  </script>
+</body>
+</html>
