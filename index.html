@@ -97,7 +97,7 @@
   </div>
 </section>
 
-<!-- 画面3：遷移後（自由編集） -->
+<!-- 画面3：遷移後（10秒で自動的に画面1へ戻る） -->
 <section id="s3" class="screen">
   <div class="stage">
     <div class="frame">
@@ -128,13 +128,38 @@
 
 <script>
 (function(){
-  // 画面切替
+  /* ===== 設定 ===== */
+  const AUTO_BACK_MS = 10000; // 画面3に来てから10秒で自動的に画面1へ戻る
+
+  /* ===== 画面切替 ===== */
   const s1 = document.getElementById('s1');
   const s2 = document.getElementById('s2');
   const s3 = document.getElementById('s3');
-  function show(el){ [s1,s2,s3].forEach(sec=>sec.classList.remove('show')); el.classList.add('show'); }
+  let autoBackTimer = null;
 
-  // 画像読み込み（日本語/英字・assets/ フォールバック）
+  function show(el){
+    [s1,s2,s3].forEach(sec=>sec.classList.remove('show'));
+    el.classList.add('show');
+
+    // 画面3に入ったら10秒後に自動で画面1に戻す
+    if (el === s3){
+      if (autoBackTimer) clearTimeout(autoBackTimer);
+      autoBackTimer = setTimeout(resetToStart, AUTO_BACK_MS);
+    } else {
+      if (autoBackTimer) { clearTimeout(autoBackTimer); autoBackTimer = null; }
+    }
+  }
+
+  function resetToStart(){
+    // 音声を停止＆巻き戻し／ボタン状態もリセット
+    [v4,v2,v1].forEach(a=>{ try{ a.pause(); a.currentTime = 0; }catch(e){} });
+    const btn = document.getElementById('listen');
+    if (btn){ btn.disabled = false; btn.style.opacity = ''; }
+
+    show(s1);
+  }
+
+  /* ===== 画像読み込み（日本語/英字・assets/ フォールバック） ===== */
   function loadByCandidates(imgEl, list){
     let i=0; const go=()=>{ imgEl.onerror=()=>{ if(++i<list.length) go(); }; imgEl.src=list[i]; }; go();
   }
@@ -147,10 +172,10 @@
     ["image1.png","画像１.png","画像1.png","image1.jpg","assets/image1.png","assets/画像１.png","assets/画像1.png"]
   );
 
-  // 1→2
+  /* ===== 1→2 ===== */
   document.getElementById('toView').addEventListener('click', ()=> show(s2));
 
-  // 2→3：音声４ → 音声２ → 音声１ を順再生。失敗はスキップ、最後で自動遷移。
+  /* ===== 2→3：音声４ → 音声２ → 音声１ を順再生。最後で自動遷移 ===== */
   const v4 = document.getElementById('voice4');
   const v2 = document.getElementById('voice2');
   const v1 = document.getElementById('voice1');
