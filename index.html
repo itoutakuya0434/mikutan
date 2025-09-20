@@ -56,7 +56,7 @@
     position:absolute; left:0; right:0; bottom:max(16px, env(safe-area-inset-bottom));
     display:grid; justify-items:center; gap:12px; padding:0 16px;
   }
-  .hint{font-weight:800; font-size:var(--hint-size); text-shadow:0 2px 10px #0009}
+  .hint{font-weight:800; font-size:var(--hint-size); text-shadow:0 2px 10px #0009; cursor:pointer}
   .cmd{
     font-weight:900; font-size:var(--cmd-size); letter-spacing:.03em;
     padding:.9em 1.4em; border:2px solid #fff; background:transparent; color:#fff;
@@ -90,7 +90,7 @@
         </div>
       </div>
       <div class="bottom">
-        <div class="hint">妖精がなにか言っているよ</div>
+        <div id="listenHint" class="hint">妖精がなにか言っているよ</div>
         <button id="listen" class="cmd" type="button">聞いてみる</button>
       </div>
     </div>
@@ -102,28 +102,28 @@
   <div class="stage">
     <div class="frame">
       <div class="bottom">
-        <div class="hint">レッツなぞとき！（※教室に進んでください）</div>
+        <div class="hint">観察ありがとう！ 次の謎へ進もう</div>
         <a id="nextLink" class="cmd" href="./">トップへ戻る</a>
       </div>
     </div>
   </div>
 </section>
 
-<!-- 音声（3つを順に再生：音声１ → 効果音 → 音声２） -->
-<audio id="voice1" preload="auto">
-  <source src="音声１.m4a" type="audio/mp4"/>
-  <source src="音声1.m4a"  type="audio/mp4"/>
-  <source src="voice1.m4a"  type="audio/mp4"/>
-</audio>
-<audio id="sfx" preload="auto">
-  <source src="効果音.m4a" type="audio/mp4"/>
-  <source src="sfx.m4a"   type="audio/mp4"/>
-  <source src="効果音.mp3" type="audio/mpeg"/>
+<!-- 音声（順に再生：音声４ → 音声２ → 音声１） -->
+<audio id="voice4" preload="auto">
+  <source src="音声４.m4a" type="audio/mp4"/>
+  <source src="音声4.m4a"  type="audio/mp4"/>
+  <source src="voice4.m4a"  type="audio/mp4"/>
 </audio>
 <audio id="voice2" preload="auto">
   <source src="音声２.m4a" type="audio/mp4"/>
   <source src="音声2.m4a"  type="audio/mp4"/>
   <source src="voice2.m4a"  type="audio/mp4"/>
+</audio>
+<audio id="voice1" preload="auto">
+  <source src="音声１.m4a" type="audio/mp4"/>
+  <source src="音声1.m4a"  type="audio/mp4"/>
+  <source src="voice1.m4a"  type="audio/mp4"/>
 </audio>
 
 <script>
@@ -134,7 +134,7 @@
   const s3 = document.getElementById('s3');
   function show(el){ [s1,s2,s3].forEach(sec=>sec.classList.remove('show')); el.classList.add('show'); }
 
-  // 画像読み込み（日本語/英字・assets/ 両対応フォールバック）
+  // 画像読み込み（日本語/英字・assets/ フォールバック）
   function loadByCandidates(imgEl, list){
     let i=0; const go=()=>{ imgEl.onerror=()=>{ if(++i<list.length) go(); }; imgEl.src=list[i]; }; go();
   }
@@ -150,47 +150,37 @@
   // 1→2
   document.getElementById('toView').addEventListener('click', ()=> show(s2));
 
-  // 2→3：「聞いてみる」で 音声１→効果音→音声２ を順に再生。失敗はスキップ。最後で自動遷移。
-  const v1 = document.getElementById('voice1');
-  const se = document.getElementById('sfx');
+  // 2→3：音声４ → 音声２ → 音声１ を順再生。失敗はスキップ、最後で自動遷移。
+  const v4 = document.getElementById('voice4');
   const v2 = document.getElementById('voice2');
+  const v1 = document.getElementById('voice1');
 
   function playSeq(list, onAllDone){
     let i = 0, safetyTimer = null;
     const next = ()=>{
       if (i >= list.length){ clearTimeout(safetyTimer); return onAllDone(); }
-      const a = list[i++];
-
-      const advance = ()=>{ a.onended=null; a.onerror=null; next(); };
-      a.onended = advance;
-      a.onerror = advance;
-
+      const a = list[i++], advance = ()=>{ a.onended=null; a.onerror=null; next(); };
+      a.onended = advance; a.onerror = advance;
       try{
         const p = a.play();
-        // 再生開始できない／自動再生制限など → 即スキップ
-        if (p && typeof p.then === 'function'){
-          p.catch(advance);
-        } else {
-          // 古い環境は保険でスキップ
-          setTimeout(advance, 6000);
-        }
-        // 無音/壊れたファイル保険：1秒で進捗なければスキップ
+        if (p && typeof p.then === 'function') p.catch(advance); else setTimeout(advance, 6000);
+        // 無音/壊れた保険：1秒で進捗なければスキップ
         const t0 = a.currentTime;
         setTimeout(()=>{ if (a.paused || a.currentTime===t0) advance(); }, 1000);
       }catch(e){ advance(); }
     };
-    // 万一の総合保険：30秒で終了扱い
-    safetyTimer = setTimeout(()=>onAllDone(), 30000);
+    safetyTimer = setTimeout(()=>onAllDone(), 30000); // 総合保険
     next();
   }
 
-  document.getElementById('listen').addEventListener('click', ()=>{
-    // 二度押し防止
+  const runPlay = ()=>{
     const btn = document.getElementById('listen');
     btn.disabled = true; btn.style.opacity = .7;
+    playSeq([v4, v2, v1], ()=>{ show(s3); });
+  };
 
-    playSeq([v1,se,v2], ()=>{ show(s3); });
-  });
+  document.getElementById('listen').addEventListener('click', runPlay);
+  document.getElementById('listenHint').addEventListener('click', runPlay); // 文字クリックでもOK
 
   // 3画面目リンク先（必要なら変更）
   document.getElementById('nextLink').href = "./";
