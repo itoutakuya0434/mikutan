@@ -22,6 +22,7 @@
       linear-gradient(#0b1220,#0e172a 40%,#111827);
     overflow:hidden;
   }
+
   .screen{position:fixed; inset:0; display:none;}
   .screen.show{display:block;}
   .stage{position:absolute; inset:0; display:grid; place-items:center; padding:16px;}
@@ -31,14 +32,14 @@
     position:relative; overflow:hidden; display:grid; place-items:center; padding:16px;
   }
 
-  /* 画面1：顕微鏡画像を中央に大きく */
+  /* 1画面目：顕微鏡画像（中央に大きく） */
   .scope-photo{
     max-width:92%; max-height:78%;
     object-fit:contain; display:block; margin:auto;
     filter:drop-shadow(0 8px 18px #0008);
   }
 
-  /* 画面2：丸い視野の中央に「画像１」を表示 */
+  /* 2画面目：丸い視野の中央に「画像１」 */
   .view-wrap{position:absolute; inset:0; display:grid; place-items:center;}
   .view{
     width:min(90vmin,820px); aspect-ratio:1/1; border-radius:50%;
@@ -50,7 +51,7 @@
   }
   .view-img{width:100%; height:100%; object-fit:contain; display:block;}
 
-  /* 下部テキスト＆コマンド */
+  /* 下部テキスト＆コマンド（□かこみ） */
   .bottom{
     position:absolute; left:0; right:0; bottom:max(16px, env(safe-area-inset-bottom));
     display:grid; justify-items:center; gap:12px; padding:0 16px;
@@ -96,7 +97,7 @@
   </div>
 </section>
 
-<!-- 画面3：遷移後（自由に編集） -->
+<!-- 画面3：遷移後（自由編集） -->
 <section id="s3" class="screen">
   <div class="stage">
     <div class="frame">
@@ -108,59 +109,92 @@
   </div>
 </section>
 
-<!-- 音声（任意）：無くても3画面目へ進みます -->
-<audio id="voice" preload="auto">
-  <source src="正解.m4a" type="audio/mp4"/>
-  <!-- 予備：別名を使うなら追加
-  <source src="voice.mp3" type="audio/mpeg"/>
-  -->
+<!-- 音声（3つを順に再生：音声１ → 効果音 → 音声２） -->
+<audio id="voice1" preload="auto">
+  <source src="音声１.m4a" type="audio/mp4"/>
+  <source src="音声1.m4a"  type="audio/mp4"/>
+  <source src="voice1.m4a"  type="audio/mp4"/>
+</audio>
+<audio id="sfx" preload="auto">
+  <source src="効果音.m4a" type="audio/mp4"/>
+  <source src="sfx.m4a"   type="audio/mp4"/>
+  <source src="効果音.mp3" type="audio/mpeg"/>
+</audio>
+<audio id="voice2" preload="auto">
+  <source src="音声２.m4a" type="audio/mp4"/>
+  <source src="音声2.m4a"  type="audio/mp4"/>
+  <source src="voice2.m4a"  type="audio/mp4"/>
 </audio>
 
 <script>
-  /* 画像を候補名で順に読み込む（日本語名/英字名/フォルダを自動フォールバック） */
-  function loadByCandidates(imgEl, list){
-    let i=0; const go=()=>{ imgEl.onerror=()=>{ if(++i<list.length) go(); }; imgEl.src=list[i]; }; go();
-  }
-
-  // 1画面目：顕微鏡画像（microscope.* / 顕微鏡.* / assets/*）
-  loadByCandidates(
-    document.getElementById('scope'),
-    ["microscope.png","microscope.jpg","顕微鏡.png","顕微鏡.jpg","顕微鏡.jpeg","microscope.webp",
-     "assets/microscope.png","assets/顕微鏡.png"]
-  );
-
-  // 2画面目：中央に「画像１」（image1.* / 画像１.* / assets/*）
-  loadByCandidates(
-    document.getElementById('viewPic'),
-    ["image1.png","image1.jpg","画像１.png","画像1.png","画像１.jpg","画像1.jpg",
-     "assets/image1.png","assets/画像１.png","assets/画像1.png"]
-  );
-
-  // 画面切り替え
+(function(){
+  // 画面切替
   const s1 = document.getElementById('s1');
   const s2 = document.getElementById('s2');
   const s3 = document.getElementById('s3');
-  function showScreen(el){ [s1,s2,s3].forEach(sec=>sec.classList.remove('show')); el.classList.add('show'); }
+  function show(el){ [s1,s2,s3].forEach(sec=>sec.classList.remove('show')); el.classList.add('show'); }
 
-  document.getElementById('toView').addEventListener('click', ()=> showScreen(s2));
+  // 画像読み込み（日本語/英字・assets/ 両対応フォールバック）
+  function loadByCandidates(imgEl, list){
+    let i=0; const go=()=>{ imgEl.onerror=()=>{ if(++i<list.length) go(); }; imgEl.src=list[i]; }; go();
+  }
+  loadByCandidates(
+    document.getElementById('scope'),
+    ["microscope.png","顕微鏡.png","microscope.jpg","顕微鏡.jpg","assets/microscope.png","assets/顕微鏡.png"]
+  );
+  loadByCandidates(
+    document.getElementById('viewPic'),
+    ["image1.png","画像１.png","画像1.png","image1.jpg","assets/image1.png","assets/画像１.png","assets/画像1.png"]
+  );
 
-  // 「聞いてみる」→ 音声があれば再生、無くても必ず画面3へ
-  const voice = document.getElementById('voice');
+  // 1→2
+  document.getElementById('toView').addEventListener('click', ()=> show(s2));
+
+  // 2→3：「聞いてみる」で 音声１→効果音→音声２ を順に再生。失敗はスキップ。最後で自動遷移。
+  const v1 = document.getElementById('voice1');
+  const se = document.getElementById('sfx');
+  const v2 = document.getElementById('voice2');
+
+  function playSeq(list, onAllDone){
+    let i = 0, safetyTimer = null;
+    const next = ()=>{
+      if (i >= list.length){ clearTimeout(safetyTimer); return onAllDone(); }
+      const a = list[i++];
+
+      const advance = ()=>{ a.onended=null; a.onerror=null; next(); };
+      a.onended = advance;
+      a.onerror = advance;
+
+      try{
+        const p = a.play();
+        // 再生開始できない／自動再生制限など → 即スキップ
+        if (p && typeof p.then === 'function'){
+          p.catch(advance);
+        } else {
+          // 古い環境は保険でスキップ
+          setTimeout(advance, 6000);
+        }
+        // 無音/壊れたファイル保険：1秒で進捗なければスキップ
+        const t0 = a.currentTime;
+        setTimeout(()=>{ if (a.paused || a.currentTime===t0) advance(); }, 1000);
+      }catch(e){ advance(); }
+    };
+    // 万一の総合保険：30秒で終了扱い
+    safetyTimer = setTimeout(()=>onAllDone(), 30000);
+    next();
+  }
+
   document.getElementById('listen').addEventListener('click', ()=>{
-    let advanced = false;
-    const go3 = ()=>{ if(advanced) return; advanced = true; showScreen(s3); };
-    try{
-      voice.currentTime = 0;
-      voice.onended = go3;
-      const p = voice.play();
-      if (p && typeof p.then === 'function') p.catch(()=>go3());
-      else setTimeout(go3, 6000);
-    }catch(e){ go3(); }
-    setTimeout(go3, 8000); // 最終保険
+    // 二度押し防止
+    const btn = document.getElementById('listen');
+    btn.disabled = true; btn.style.opacity = .7;
+
+    playSeq([v1,se,v2], ()=>{ show(s3); });
   });
 
-  // 3画面目のリンク先（必要なら変更）
-  document.getElementById('nextLink').href = "./"; // 例：'index.html' や 'next.html' に変更可
+  // 3画面目リンク先（必要なら変更）
+  document.getElementById('nextLink').href = "./";
+})();
 </script>
 </body>
 </html>
